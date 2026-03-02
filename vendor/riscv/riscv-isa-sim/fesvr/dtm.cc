@@ -76,15 +76,30 @@ void dtm_t::nop()
 
 void dtm_t::select_hart(int hartsel) {
   int dmcontrol = read(DM_DMCONTROL);
-  write (DM_DMCONTROL, set_field(dmcontrol, DM_DMCONTROL_HASEL, hartsel));
+  dmcontrol = set_field(dmcontrol, DM_DMCONTROL_HASEL, DM_DMCONTROL_HASEL_SINGLE);
+  dmcontrol = set_field(dmcontrol, DM_DMCONTROL_HARTSELLO,
+      hartsel & ((1 << DM_DMCONTROL_HARTSELLO_LENGTH) - 1));
+  dmcontrol = set_field(dmcontrol, DM_DMCONTROL_HARTSELHI,
+      (hartsel >> DM_DMCONTROL_HARTSELLO_LENGTH) &
+      ((1 << DM_DMCONTROL_HARTSELHI_LENGTH) - 1));
+  write(DM_DMCONTROL, dmcontrol);
   current_hart = hartsel;
 }
 
 int dtm_t::enumerate_harts() {
-  int max_hart = (1 << DM_DMCONTROL_HASEL_LENGTH) - 1;
-  write(DM_DMCONTROL, set_field(read(DM_DMCONTROL), DM_DMCONTROL_HASEL, max_hart));
+  int max_hart = (1 << (DM_DMCONTROL_HARTSELHI_LENGTH + DM_DMCONTROL_HARTSELLO_LENGTH)) - 1;
+  int dmcontrol = read(DM_DMCONTROL);
+  dmcontrol = set_field(dmcontrol, DM_DMCONTROL_HASEL, DM_DMCONTROL_HASEL_SINGLE);
+  dmcontrol = set_field(dmcontrol, DM_DMCONTROL_HARTSELLO,
+      max_hart & ((1 << DM_DMCONTROL_HARTSELLO_LENGTH) - 1));
+  dmcontrol = set_field(dmcontrol, DM_DMCONTROL_HARTSELHI,
+      (max_hart >> DM_DMCONTROL_HARTSELLO_LENGTH) &
+      ((1 << DM_DMCONTROL_HARTSELHI_LENGTH) - 1));
+  write(DM_DMCONTROL, dmcontrol);
   read(DM_DMSTATUS);
-  max_hart = get_field(read(DM_DMCONTROL), DM_DMCONTROL_HASEL);
+  dmcontrol = read(DM_DMCONTROL);
+  max_hart = (get_field(dmcontrol, DM_DMCONTROL_HARTSELHI) << DM_DMCONTROL_HARTSELLO_LENGTH) |
+             get_field(dmcontrol, DM_DMCONTROL_HARTSELLO);
 
   int hartsel;
   for (hartsel = 0; hartsel <= max_hart; hartsel++) {
@@ -105,7 +120,12 @@ void dtm_t::halt(int hartsel)
   }
 
   int dmcontrol = DM_DMCONTROL_HALTREQ | DM_DMCONTROL_DMACTIVE;
-  dmcontrol = set_field(dmcontrol, DM_DMCONTROL_HASEL, hartsel);
+  dmcontrol = set_field(dmcontrol, DM_DMCONTROL_HASEL, DM_DMCONTROL_HASEL_SINGLE);
+  dmcontrol = set_field(dmcontrol, DM_DMCONTROL_HARTSELLO,
+      hartsel & ((1 << DM_DMCONTROL_HARTSELLO_LENGTH) - 1));
+  dmcontrol = set_field(dmcontrol, DM_DMCONTROL_HARTSELHI,
+      (hartsel >> DM_DMCONTROL_HARTSELLO_LENGTH) &
+      ((1 << DM_DMCONTROL_HARTSELHI_LENGTH) - 1));
   write(DM_DMCONTROL, dmcontrol);
   int dmstatus;
   do {
@@ -121,7 +141,12 @@ void dtm_t::halt(int hartsel)
 void dtm_t::resume(int hartsel)
 {
   int dmcontrol = DM_DMCONTROL_RESUMEREQ | DM_DMCONTROL_DMACTIVE;
-  dmcontrol = set_field(dmcontrol, DM_DMCONTROL_HASEL, hartsel);
+  dmcontrol = set_field(dmcontrol, DM_DMCONTROL_HASEL, DM_DMCONTROL_HASEL_SINGLE);
+  dmcontrol = set_field(dmcontrol, DM_DMCONTROL_HARTSELLO,
+      hartsel & ((1 << DM_DMCONTROL_HARTSELLO_LENGTH) - 1));
+  dmcontrol = set_field(dmcontrol, DM_DMCONTROL_HARTSELHI,
+      (hartsel >> DM_DMCONTROL_HARTSELLO_LENGTH) &
+      ((1 << DM_DMCONTROL_HARTSELHI_LENGTH) - 1));
   write(DM_DMCONTROL, dmcontrol);
   int dmstatus;
   do {
