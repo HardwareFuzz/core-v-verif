@@ -1,4 +1,5 @@
 build/
+build_fesvr_fix/
 *.gch
 autom4te.cache/
 .*.swp
