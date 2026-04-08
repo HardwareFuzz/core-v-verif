@@ -556,6 +556,28 @@ void host_thread_main(void* arg)
 
 void dtm_t::reset()
 {
+  // Rocket dual-hart bootrom already jumps all harts to DRAM. On those wrappers the
+  // Debug Module can mis-handle abstract commands against non-zero harts, so avoid the
+  // per-hart fence_i/write_csr sequence and restart both harts via ndmreset instead.
+  if (num_harts > 1 && get_entry_point() == 0x80000000ULL) {
+    write(DM_DMCONTROL, DM_DMCONTROL_DMACTIVE | DM_DMCONTROL_NDMRESET);
+    for (int i = 0; i < 32; i++) {
+      nop();
+    }
+    write(DM_DMCONTROL, DM_DMCONTROL_DMACTIVE);
+
+    uint32_t dmstatus;
+    do {
+      dmstatus = read(DM_DMSTATUS);
+    } while (get_field(dmstatus, DM_DMSTATUS_ALLRUNNING) == 0 ||
+             get_field(dmstatus, DM_DMSTATUS_ANYUNAVAIL) != 0);
+
+    select_hart(0);
+    read(DM_DMSTATUS);
+    current_hart = 0;
+    return;
+  }
+
   for (int hartsel = 0; hartsel < num_harts; hartsel ++ ){
     select_hart(hartsel);
     // this command also does a halt and resume
@@ -600,6 +622,9 @@ void dtm_t::producer_thread()
   data_base = get_field(hartinfo, DM_HARTINFO_DATAADDR);
   
   num_harts = enumerate_harts();
+  for (int hartsel = 1; hartsel < num_harts; hartsel++) {
+    halt(hartsel);
+  }
   halt(0);
   // Note: We don't support systems with heterogeneous XLEN.
   // It's possible to do this at the cost of extra cycles.
